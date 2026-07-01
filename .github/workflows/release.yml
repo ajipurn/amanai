@@ -1,0 +1,33 @@
+name: Publish
+
+# Push a tag like v0.1.0 to build and publish to PyPI via Trusted Publishing.
+# No API token stored — PyPI verifies this repo/workflow over OIDC at run time.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi              # must match the "Environment name" on PyPI
+    permissions:
+      id-token: write              # OIDC — the whole point: no stored secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      # The wheel version comes from amanai/__init__.__version__, not the tag.
+      # Fail fast if they disagree so we never publish a mislabeled release.
+      - name: Tag must match package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(grep -oE '__version__ = "[^"]+"' packages/sdk-python/amanai/__init__.py | cut -d'"' -f2)
+          echo "tag=$TAG  package=$VER"
+          test "$TAG" = "$VER" || { echo "::error::tag v$TAG != __version__ $VER"; exit 1; }
+
+      - name: Build sdist + wheel
+        run: uv build packages/sdk-python
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/sdk-python/dist

@@ -1,0 +1,3 @@
+[
+  { "tool": "apply_discount", "arg": "pct", "op": ">=", "value": 50 }
+]

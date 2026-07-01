@@ -1,0 +1,38 @@
+[
+  {
+    "id": "discount-cap",
+    "tool": "apply_discount",
+    "args": [{ "arg": "pct", "op": ">=", "value": 50 }],
+    "action": "block",
+    "reason": "discount of 50% or more is never allowed"
+  },
+  {
+    "id": "support-discount-limit",
+    "tool": "apply_discount",
+    "context": [{ "key": "role", "op": "==", "value": "support" }],
+    "args": [{ "arg": "pct", "op": ">", "value": 20 }],
+    "action": "block",
+    "reason": "support role is capped at 20% discount"
+  },
+  {
+    "id": "refund-approval",
+    "tool": "refund_payment",
+    "args": [{ "arg": "amount", "op": ">", "value": 100 }],
+    "action": "require_approval",
+    "reason": "refunds over $100 require human approval"
+  },
+  {
+    "id": "external-email",
+    "capability": "external_comms",
+    "args": [{ "arg": "to", "op": "email_external", "value": ["acme.com"] }],
+    "action": "block",
+    "reason": "email to an external domain is blocked"
+  },
+  {
+    "id": "ssrf-block",
+    "tool": "http_fetch",
+    "args": [{ "arg": "url", "op": "internal_url", "value": true }],
+    "action": "block",
+    "reason": "fetching an internal/private address is blocked (SSRF)"
+  }
+]
