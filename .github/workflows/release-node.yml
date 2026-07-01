@@ -1,0 +1,39 @@
+name: Publish (npm)
+
+# Triggered by the same `v*` tag as the PyPI release (unified versioning via
+# release.sh). Builds and publishes the TypeScript SDK to npm. Requires an
+# NPM_TOKEN secret with publish rights.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC — required by `npm publish --provenance`
+    defaults:
+      run:
+        working-directory: packages/sdk-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      # The npm version comes from package.json, not the tag. Fail fast if they
+      # disagree so we never publish a mislabeled release.
+      - name: Tag must match package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(node -p "require('./package.json').version")
+          echo "tag=$TAG  package=$VER"
+          test "$TAG" = "$VER" || { echo "::error::tag v$TAG != package version $VER"; exit 1; }
+
+      - run: npm ci
+      - run: npm run typecheck && npm test && npm run build
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

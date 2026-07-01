@@ -109,6 +109,18 @@ class TraceEvent:
             "error": self.error,
         }
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "TraceEvent":
+        """Rebuild a TraceEvent from `to_dict()` output — the inverse round-trip
+        so a trace can be persisted as JSON and reloaded (see `load_trace`)."""
+        return cls(
+            action=ActionRequest(**d["action"]),
+            decision=PolicyDecision(**d["decision"]),
+            status=d["status"],
+            output=d.get("output"),
+            error=d.get("error"),
+        )
+
 
 @dataclass(frozen=True)
 class PendingAction:
@@ -169,6 +181,15 @@ class Policy:
 
 
 # ── loading & validation ──────────────────────────────────────────────────────
+def _is_path(s: str) -> bool:
+    """True if `s` names an existing file. A long inline JSON string overflows the
+    OS filename limit — treat that (OSError) as 'not a path', not a crash."""
+    try:
+        return Path(s).exists()
+    except OSError:
+        return False
+
+
 def _hash8(obj, prefix: str) -> str:
     """Deterministic short id: sha1 of the canonical JSON, prefixed."""
     blob = json.dumps(obj, sort_keys=True, default=str)
@@ -229,7 +250,7 @@ def load_policy(source, *, require_ids: bool = False) -> Policy:
     if isinstance(source, Policy):
         return source
     if isinstance(source, (str, Path)):
-        text = Path(source).read_text() if Path(str(source)).exists() else str(source)
+        text = Path(source).read_text() if _is_path(str(source)) else str(source)
         try:
             raw_rules = json.loads(text)
         except json.JSONDecodeError as e:
@@ -247,6 +268,23 @@ def load_policy(source, *, require_ids: bool = False) -> Policy:
             raise PolicyError(f"duplicate rule id {r.id!r}")
         seen.add(r.id)
     return Policy(rules)
+
+
+def load_trace(source) -> list[TraceEvent]:
+    """Load a trace saved as JSON — a list of `TraceEvent.to_dict()` — from a file
+    path or a JSON string. The inverse of `[e.to_dict() for e in collect_trace()]`,
+    so a recorded trace can be re-evaluated later (e.g. `amanai test`)."""
+    if isinstance(source, (str, Path)):
+        text = Path(source).read_text() if _is_path(str(source)) else str(source)
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise PolicyError(f"invalid trace JSON: {e}") from e
+    else:
+        raw = source
+    if not isinstance(raw, list):
+        raise PolicyError("trace must be a list of events")
+    return [TraceEvent.from_dict(e) for e in raw]
 
 
 # ── context-local state (per request/invocation, never global) ────────────────
@@ -314,4 +352,3 @@ def evaluate(action: ActionRequest, policy: Policy | None = None) -> PolicyDecis
         reason=rule.reason or f"matched rule {rule.id}",
         metadata={"capability": rule.capability} if rule.capability else {},
     )
-

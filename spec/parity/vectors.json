@@ -1,0 +1,104 @@
+[
+  {
+    "name": "discount-block-at-threshold",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block", "reason": "cap" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 90 } },
+    "expect": { "outcome": "block", "ruleId": "d" }
+  },
+  {
+    "name": "discount-allow-below-threshold",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block", "reason": "cap" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 10 } },
+    "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "boundary-exactly-50-blocks",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 50 } },
+    "expect": { "outcome": "block", "ruleId": "d" }
+  },
+  {
+    "name": "string-number-coercion",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": "90" } },
+    "expect": { "outcome": "block", "ruleId": "d" }
+  },
+  {
+    "name": "context-role-predicate",
+    "policy": [
+      { "id": "support-cap", "tool": "apply_discount", "context": [{ "key": "role", "op": "==", "value": "support" }], "args": [{ "arg": "pct", "op": ">", "value": 20 }], "action": "block", "reason": "support cap" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 30 }, "context": { "role": "support" } },
+    "expect": { "outcome": "block", "ruleId": "support-cap" }
+  },
+  {
+    "name": "context-role-mismatch-allows",
+    "policy": [
+      { "id": "support-cap", "tool": "apply_discount", "context": [{ "key": "role", "op": "==", "value": "support" }], "args": [{ "arg": "pct", "op": ">", "value": 20 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 30 }, "context": { "role": "admin" } },
+    "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "email-external-blocks",
+    "policy": [
+      { "id": "ext-email", "capability": "external_comms", "args": [{ "arg": "to", "op": "email_external", "value": ["acme.com"] }], "action": "block", "reason": "external" }
+    ],
+    "action": { "tool": "send_email", "input": { "to": "user@evil.com" }, "capability": "external_comms" },
+    "expect": { "outcome": "block", "ruleId": "ext-email" }
+  },
+  {
+    "name": "email-internal-allows",
+    "policy": [
+      { "id": "ext-email", "capability": "external_comms", "args": [{ "arg": "to", "op": "email_external", "value": ["acme.com"] }], "action": "block" }
+    ],
+    "action": { "tool": "send_email", "input": { "to": "user@acme.com" }, "capability": "external_comms" },
+    "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "ssrf-internal-ip-blocks",
+    "policy": [
+      { "id": "ssrf", "tool": "http_fetch", "args": [{ "arg": "url", "op": "internal_url", "value": true }], "action": "block", "reason": "ssrf" }
+    ],
+    "action": { "tool": "http_fetch", "input": { "url": "http://169.254.169.254/latest/meta-data" } },
+    "expect": { "outcome": "block", "ruleId": "ssrf" }
+  },
+  {
+    "name": "ssrf-public-ip-allows",
+    "policy": [
+      { "id": "ssrf", "tool": "http_fetch", "args": [{ "arg": "url", "op": "internal_url", "value": true }], "action": "block" }
+    ],
+    "action": { "tool": "http_fetch", "input": { "url": "http://8.8.8.8/" } },
+    "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "legacy-flat-form",
+    "policy": [{ "tool": "apply_discount", "arg": "pct", "op": ">=", "value": 50 }],
+    "action": { "tool": "apply_discount", "input": { "pct": 90 } },
+    "expect": { "outcome": "block", "ruleId": "rule-f3d8215d" }
+  },
+  {
+    "name": "generated-id-canonical",
+    "policy": [
+      { "tool": "x", "args": [{ "arg": "p", "op": ">=", "value": 1 }], "action": "block", "reason": "r" }
+    ],
+    "action": { "tool": "x", "input": { "p": 5 } },
+    "expect": { "outcome": "block", "ruleId": "rule-ab3f4deb" }
+  },
+  {
+    "name": "no-policy-match-allows",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "refund_payment", "input": { "amount": 999 } },
+    "expect": { "outcome": "allow", "ruleId": null }
+  }
+]

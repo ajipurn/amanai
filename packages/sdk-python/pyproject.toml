@@ -17,6 +17,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+amanai = "amanai.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -26,3 +29,5 @@ path = "amanai/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["amanai"]
+# Ship the red-team corpus (JSON data) inside the wheel; loaded via importlib.resources.
+artifacts = ["amanai/redteam/corpus/*.json"]

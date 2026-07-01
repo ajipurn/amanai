@@ -49,6 +49,11 @@ def apply_discount(pct): ...            # raises ToolBlocked when pct >= 50
 > (`examples/action.policy.json`). A self-hostable server and dashboard are
 > future work.
 
+Building in TypeScript? A zero-dependency [TypeScript SDK](packages/sdk-node)
+(`npm install @amanai/sdk`) ports the core engine — it loads the **same policy JSON** and
+returns the **same decisions**, verified by shared parity vectors run in both
+languages' CI.
+
 ## What it does
 
 - **Action policies** — `set_policy` + `@tool` evaluate each call *before* it runs
@@ -123,6 +128,27 @@ See `examples/action_policy_demo.py` for a full agent running under policy, and
 `amanai.testing` (`assert_blocked`, `assert_no_violations`, `replay`) for the CI
 side.
 
+## Integrate with your framework
+
+Already built on OpenAI, LangChain, or CrewAI? Don't rewrite each tool — the engine
+only needs a tool name and an argument dict, so an adapter funnels the framework's
+tool-calls straight in. Frameworks are imported lazily; the SDK stays zero-dependency.
+
+```python
+from amanai import set_policy
+from amanai.adapters.openai import guard_openai_tool_call   # OpenAI / Anthropic loop
+
+set_policy("amanai.policy.json")
+for tc in response.choices[0].message.tool_calls:
+    guard_openai_tool_call(tc)      # raises ToolBlocked / ApprovalRequired in enforce
+    result = dispatch(tc)
+```
+
+Recipes: [OpenAI / Anthropic](docs/integrations/openai.md) ·
+[LangChain](docs/integrations/langchain.md) · [CrewAI](docs/integrations/crewai.md).
+`guard_tool_call(name, args)` is the framework-neutral funnel underneath them all
+(and `guard_mcp_call` is its MCP-shaped alias).
+
 ## Runtime guardrails (supporting)
 
 The SDK includes **inline guardrails** that run locally inside your agent. Block
@@ -140,6 +166,27 @@ reply = guard_output(model_reply)        # redacts emails, cards, secrets
 
 See `examples/guarded_agent.py` for a complete guarded-agent example.
 
+## Red-team regression pack
+
+A curated, static attack corpus (prompt injection, jailbreak, system-prompt leak,
+PII exfil, tool abuse) plus benign controls, with a dependency-free runner. Use it
+to prove the guardrails still catch what they claim, or point it at your own agent:
+
+```python
+from amanai import load_pack, run_pack
+
+report = run_pack(load_pack())            # against the built-in guardrails
+assert report.passed                      # fails if a guardrail regressed
+
+report = run_pack(load_pack("tool_abuse"), target=my_agent)   # end-to-end
+```
+
+Or from CI: `amanai redteam` (exit non-zero on any regression;
+`--target module:fn` runs the end-to-end tool-abuse cases against your agent).
+
+This is a **regression harness with a starter corpus**, not an exhaustive attack
+library — for breadth (adaptive/generative attacks) use **DeepTeam** or **Garak**.
+
 ## Production monitoring (optional — needs a server)
 
 The SDK includes a `Monitor` client for sending live traces to an Amanai server.
@@ -150,6 +197,47 @@ from amanai import Monitor, collect_trace
 
 mon = Monitor("http://localhost:8000", PUBLIC_KEY, SECRET_KEY)
 mon.log_trace(collect_trace(), user_id="u123")   # canonical events, PII redacted
+```
+
+## Lint your policy
+
+`load_policy` validates a policy's *structure*; `lint_policy` catches *semantic*
+bugs that first-match-wins hides — an unreachable rule, two rules that conflict,
+dead duplicates, or a tool no rule covers:
+
+```python
+from amanai import lint_policy
+
+for f in lint_policy("amanai.policy.json"):
+    print(f.severity, f.code, f.rule_ids, f.message)
+```
+
+Findings carry a `severity` (`error` / `warn` / `info`) and a `code`
+(`unreachable-rule`, `conflicting-rules`, `redundant-rule`, `missing-reason`,
+`uncovered-tool`). It is conservative on `unreachable-rule`: an `error` only when
+an earlier rule *provably* matches a superset of the later rule (a false "delete
+this" is worse than a miss); broader numeric-range subsumption is reported at
+`info`. Pass `tools=registered_tools()` to also flag protected tools no rule covers.
+
+## Command line
+
+The `amanai` command wraps the engine for the terminal and CI — no Python file
+needed. Exit codes: `0` clean, `1` findings/violations, `2` usage error.
+
+```bash
+amanai validate  amanai.policy.json                 # structural check (load_policy)
+amanai lint      amanai.policy.json --strict        # semantic check (unreachable/conflicting rules)
+amanai test      amanai.policy.json trace.json      # assert a recorded trace against the policy
+amanai check-mcp tools.json                         # static checks on MCP tool definitions
+amanai explain   amanai.policy.json --tool apply_discount --arg pct=90   # dry-run one action
+```
+
+Add `--json` to any subcommand for machine-readable output. Gate a policy in CI
+with two lines and no test file:
+
+```yaml
+- run: amanai lint amanai.policy.json --strict
+- run: amanai test amanai.policy.json trace.json
 ```
 
 ## Continuous integration

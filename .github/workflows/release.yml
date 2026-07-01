@@ -12,6 +12,7 @@ jobs:
     environment: pypi              # must match the "Environment name" on PyPI
     permissions:
       id-token: write              # OIDC — the whole point: no stored secret
+      contents: write              # create the GitHub Release from the pushed tag
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -31,3 +32,10 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: packages/sdk-python/dist
+
+      # Promote the pushed tag to a GitHub Release: auto notes + built artifacts.
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: packages/sdk-python/dist/*

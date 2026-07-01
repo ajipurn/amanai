@@ -39,9 +39,12 @@ from amanai.guardrails import (
     redact_pii,
     scan,
 )
+from amanai.adapters import guard_tool_call
 from amanai.judge import run_detector, run_mcp_check
+from amanai.linter import Finding, lint_policy
 from amanai.mcp_adapter import guard_mcp_call
 from amanai.monitor import Monitor
+from amanai.redteam import Report, load_pack, run_pack
 from amanai.policy import (
     MODES,
     OUTCOMES,
@@ -61,6 +64,7 @@ from amanai.policy import (
     get_mode,
     get_policy,
     load_policy,
+    load_trace,
     set_context,
     set_mode,
     set_policy,
@@ -69,6 +73,7 @@ from amanai.policy import (
 __all__ = [
     # --- Action Policy Engine ---
     "load_policy",
+    "load_trace",
     "set_policy",
     "get_policy",
     "evaluate",
@@ -97,11 +102,19 @@ __all__ = [
     "reset",
     "registered_tools",
     "uncovered_tools",
-    # MCP adapter
+    # adapters (framework funnel)
+    "guard_tool_call",
     "guard_mcp_call",
     # --- supporting: offline judge & MCP static checks ---
     "run_detector",
     "run_mcp_check",
+    # --- policy linter ---
+    "lint_policy",
+    "Finding",
+    # --- red-team pack ---
+    "load_pack",
+    "run_pack",
+    "Report",
     # clear active policy
     "clear_tool_policy",
     # --- supporting: guardrails ---

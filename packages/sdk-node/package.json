@@ -1,0 +1,55 @@
+{
+  "name": "@amanai/sdk",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.1.0",
+  "description": "Action Policy Engine for AI agents — policy-as-code for tool-calls. Zero-dependency TypeScript core engine that loads the same policy JSON and returns the same decisions as the Python SDK.",
+  "license": "Apache-2.0",
+  "author": "Aji Purnomo <hi@aji.is-a.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajipurn/amanai.git",
+    "directory": "packages/sdk-node"
+  },
+  "homepage": "https://github.com/ajipurn/amanai/tree/main/packages/sdk-node#readme",
+  "bugs": "https://github.com/ajipurn/amanai/issues",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "ai",
+    "agent",
+    "security",
+    "llm",
+    "policy-as-code",
+    "tool-call",
+    "guardrails"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
