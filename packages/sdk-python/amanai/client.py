@@ -38,8 +38,48 @@ from amanai.policy import (
 # Context-local trace buffer — concurrent requests never see each other's calls.
 _trace: contextvars.ContextVar[list | None] = contextvars.ContextVar("amanai_trace", default=None)
 
+# Context-local approval grants: tokens whose next matching action may execute.
+# One-shot — consumed on use, so one approval sanctions exactly one execution.
+_approvals: contextvars.ContextVar[set | None] = contextvars.ContextVar(
+    "amanai_approvals", default=None
+)
+
 # Static, declaration-time inventory of every protected tool (for security review).
 _REGISTRY: dict[str, dict] = {}
+
+
+def approve_action(pending_or_token) -> str:
+    """Grant one execution for a `require_approval`-gated action.
+
+    Takes a `PendingAction` (from `ApprovalRequired.pending`) or its token string.
+    The grant is one-shot and context-local: the next call whose action matches the
+    token executes (recorded with status `approved`) and consumes the grant —
+    an identical call after that requires approval again.
+
+        try:
+            refund_payment(amount=5000)
+        except ApprovalRequired as e:
+            token = e.pending.token      # park it for a human / callback
+        approve_action(token)
+        refund_payment(amount=5000)      # runs exactly once under this grant
+    """
+    token = getattr(pending_or_token, "token", pending_or_token)
+    if not isinstance(token, str) or not token.startswith("pending-"):
+        raise ValueError(f"not a PendingAction or its token: {pending_or_token!r}")
+    grants = _approvals.get()
+    if grants is None:
+        grants = set()
+        _approvals.set(grants)
+    grants.add(token)
+    return token
+
+
+def _consume_approval(token: str) -> bool:
+    grants = _approvals.get()
+    if grants and token in grants:
+        grants.discard(token)
+        return True
+    return False
 
 
 def _buffer() -> list:
@@ -160,10 +200,13 @@ def tool(
             if decision.outcome == "block" and mode == "enforce":
                 record_event(TraceEvent(action, decision, status="blocked"))
                 raise ToolBlocked(decision.reason or f"{tool_name} blocked by policy")
+            approved = False
             if decision.outcome == "require_approval" and mode == "enforce":
                 pending = PendingAction(action, decision)
-                record_event(TraceEvent(action, decision, status="pending"))
-                raise ApprovalRequired(pending)
+                approved = _consume_approval(pending.token)
+                if not approved:
+                    record_event(TraceEvent(action, decision, status="pending"))
+                    raise ApprovalRequired(pending)
 
             try:
                 result = fn(*args, **kwargs)
@@ -171,13 +214,15 @@ def tool(
                 record_event(TraceEvent(action, decision, status="error", error=str(e)))
                 raise
 
-            # In shadow mode a would-be-blocked call still ran — mark it.
-            shadowed = decision.outcome in ("block", "require_approval")
-            record_event(
-                TraceEvent(
-                    action, decision, status="shadowed" if shadowed else "executed", output=result
-                )
-            )
+            # approved = executed under an explicit one-shot grant;
+            # shadowed = a would-be-blocked call that still ran (shadow mode).
+            if approved:
+                status = "approved"
+            elif decision.outcome in ("block", "require_approval"):
+                status = "shadowed"
+            else:
+                status = "executed"
+            record_event(TraceEvent(action, decision, status=status, output=result))
             return result
 
         return wrapper
@@ -200,16 +245,20 @@ def collect_tool_calls() -> list:
     `collect_trace` if you want the full evidence instead)."""
     out = []
     for e in collect_trace():
-        if e.status in ("executed", "shadowed"):
+        if e.status in ("executed", "shadowed", "approved"):
             rec = {"tool": e.action.tool, "input": dict(e.action.input), "output": e.output}
             if e.decision.outcome == "warn":
                 rec["policy_warning"] = True
+            if e.status == "approved":
+                rec["approved"] = True
             out.append(rec)
     return out
 
 
 def reset() -> None:
+    """Clear the trace buffer and any unconsumed approval grants."""
     _trace.set([])
+    _approvals.set(None)
 
 
 def registered_tools() -> dict[str, dict]:

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ajipurn/amanai/spec/wire/trace-event.v1.schema.json",
+  "title": "Amanai trace wire format v1",
+  "description": "A recorded trace: the JSON array emitted by `[e.to_dict() for e in collect_trace()]` (Python) / `trace.map(traceEventToJSON)` (TypeScript), consumed by `amanai test` and sent as the `events` array in Monitor payloads. Consumers MUST tolerate additional fields (additive evolution); removals or type changes require a v2.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/traceEvent" },
+  "$defs": {
+    "traceEvent": {
+      "type": "object",
+      "required": ["id", "ts", "action", "decision", "status", "output", "error"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique event id (`evt-` + 32 hex). Empty string on traces recorded by pre-0.3 SDKs (unknown, never fabricated on load).",
+          "pattern": "^(evt-[0-9a-f]{32}|)$"
+        },
+        "ts": {
+          "type": "string",
+          "description": "UTC timestamp, millisecond precision, Z suffix (`Date.toISOString()` format). Empty string on pre-0.3 traces."
+        },
+        "action": { "$ref": "#/$defs/action" },
+        "decision": { "$ref": "#/$defs/decision" },
+        "status": {
+          "type": "string",
+          "description": "What happened when the action was enforced. `approved` = executed under an explicit one-shot approval grant.",
+          "enum": ["executed", "blocked", "shadowed", "pending", "evaluated", "error", "approved"]
+        },
+        "output": { "description": "The tool's return value when it ran, else null." },
+        "error": { "type": ["string", "null"] }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["tool", "input", "capability", "context", "metadata"],
+      "additionalProperties": true,
+      "properties": {
+        "tool": { "type": "string" },
+        "input": { "type": "object" },
+        "capability": { "type": ["string", "null"] },
+        "context": { "type": "object" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["outcome", "rule_id", "reason", "metadata", "policy_digest"],
+      "additionalProperties": true,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["allow", "block", "warn", "require_approval"]
+        },
+        "rule_id": { "type": ["string", "null"] },
+        "reason": { "type": "string" },
+        "metadata": { "type": "object" },
+        "policy_digest": {
+          "type": ["string", "null"],
+          "description": "Version id of the policy that decided (`policy-` + sha1/8 of the normalized rules); null when no policy was loaded.",
+          "pattern": "^policy-[0-9a-f]{8}$"
+        }
+      }
+    }
+  }
+}

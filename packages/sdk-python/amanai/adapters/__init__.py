@@ -13,6 +13,7 @@ missing. The SDK stays zero-dependency.
 
 from __future__ import annotations
 
+from amanai.client import _consume_approval
 from amanai.client import record_event as _record_event
 from amanai.policy import (
     ActionRequest,
@@ -45,6 +46,11 @@ def guard_tool_call(
 
     This only *gates*. For executed evidence with the real tool output, call
     `record_tool_call` after the tool runs.
+
+    Approvals: after `approve_action(token)`, the next matching call consumes the
+    grant, records an `approved` event, and returns the decision so the caller
+    dispatches. Skip `record_tool_call` for that call — it can't see the grant and
+    would re-record the execution as a `shadowed` bypass.
     """
     action = ActionRequest(
         name,
@@ -59,7 +65,11 @@ def guard_tool_call(
             _record_event(TraceEvent(action, decision, status="blocked"))
             raise ToolBlocked(decision.reason or f"{name} blocked by policy")
         if decision.outcome == "require_approval":
+            pending = PendingAction(action, decision)
+            if _consume_approval(pending.token):
+                _record_event(TraceEvent(action, decision, status="approved"))
+                return decision
             _record_event(TraceEvent(action, decision, status="pending"))
-            raise ApprovalRequired(PendingAction(action, decision))
+            raise ApprovalRequired(pending)
 
     return decision

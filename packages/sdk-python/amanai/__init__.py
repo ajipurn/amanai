@@ -20,6 +20,7 @@ Prompt-injection and PII guardrails remain supporting modules, not the center.
 """
 
 from amanai.client import (
+    approve_action,
     collect_tool_calls,
     collect_trace,
     record_tool_call,
@@ -96,6 +97,7 @@ __all__ = [
     "clear_context",
     # protect & collect
     "tool",
+    "approve_action",
     "record_tool_call",
     "collect_tool_calls",
     "collect_trace",

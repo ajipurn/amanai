@@ -16,7 +16,7 @@ import type { Mode, Policy, PolicyDecision, ActionRequest } from "./policy.js";
 export interface TraceEvent {
   action: ActionRequest;
   decision: PolicyDecision;
-  status: string; // executed | blocked | shadowed | pending | evaluated | error
+  status: string; // executed | blocked | shadowed | pending | evaluated | error | approved
   output?: unknown;
   error?: string | null;
   /** Unique event id (`evt-` + 32 hex) and UTC timestamp — filled by recordEvent. */
@@ -29,10 +29,11 @@ interface Store {
   mode: Mode;
   context: Record<string, unknown>;
   trace: TraceEvent[];
+  approvals: Set<string>;
 }
 
 function freshStore(): Store {
-  return { policy: null, mode: "enforce", context: {}, trace: [] };
+  return { policy: null, mode: "enforce", context: {}, trace: [], approvals: new Set() };
 }
 
 const als = new AsyncLocalStorage<Store>();
@@ -89,8 +90,28 @@ export function collectTrace(): TraceEvent[] {
   s.trace = [];
   return out;
 }
+/** Clear the trace buffer and any unconsumed approval grants. */
 export function reset(): void {
-  store().trace = [];
+  const s = store();
+  s.trace = [];
+  s.approvals = new Set();
+}
+
+/** Grant one execution for a `require_approval`-gated action (see Python
+ * `approve_action`). One-shot and context-local: the next matching call consumes
+ * the grant; an identical call after that requires approval again. */
+export function approveAction(pendingOrToken: string | { token: string }): string {
+  const token = typeof pendingOrToken === "string" ? pendingOrToken : pendingOrToken.token;
+  if (typeof token !== "string" || !token.startsWith("pending-")) {
+    throw new Error(`not an approval token: ${JSON.stringify(pendingOrToken)}`);
+  }
+  store().approvals.add(token);
+  return token;
+}
+
+/** Consume a grant if present — one approval sanctions exactly one execution. */
+export function consumeApproval(token: string): boolean {
+  return store().approvals.delete(token);
 }
 
 export function traceEventToJSON(e: TraceEvent): Record<string, unknown> {

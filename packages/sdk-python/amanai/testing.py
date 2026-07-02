@@ -33,7 +33,9 @@ from amanai.policy import (
 # Outcomes that count as a policy violation in a recorded trace.
 VIOLATION_OUTCOMES = ("block", "require_approval")
 # Statuses meaning the action actually ran (despite the decision).
-EXECUTED_STATUSES = ("executed", "shadowed")
+# "approved" also ran, but under an explicit one-shot grant — see
+# `assert_no_violations` for how it is judged.
+EXECUTED_STATUSES = ("executed", "shadowed", "approved")
 
 
 @contextmanager
@@ -74,13 +76,19 @@ def assert_no_violations(events: list[TraceEvent], policy: Policy | None = None)
     (status `blocked`/`pending`) is the policy working — it does not count. Only
     a call that ran and violates the active (or passed) policy fails the gate.
     Re-evaluating matters: CI must test the policy you enforce now, not blindly
-    trust whatever decision was stored in an old/manual trace."""
+    trust whatever decision was stored in an old/manual trace.
+
+    An `approved` execution is the sanctioned path for `require_approval` — not a
+    violation. It still fails the gate if the policy now says `block`: an approval
+    grant cannot sanction an outright-blocked action."""
     bad = []
     for event in events:
         if event.status not in EXECUTED_STATUSES:
             continue
         decision = evaluate(event.action, policy)
-        if decision.outcome in VIOLATION_OUTCOMES:
+        if decision.outcome == "block":
+            bad.append((event, decision))
+        elif decision.outcome == "require_approval" and event.status != "approved":
             bad.append((event, decision))
     if bad:
         offenders = ", ".join(f"{event.action.tool}[{decision.rule_id}]" for event, decision in bad)

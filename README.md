@@ -129,6 +129,26 @@ See `examples/action_policy_demo.py` for a full agent running under policy, and
 `amanai.testing` (`assert_blocked`, `assert_no_violations`, `replay`) for the CI
 side.
 
+### Approvals (human-in-the-loop)
+
+A `require_approval` rule parks the action instead of running it; `approve_action`
+grants **exactly one** execution — an identical call afterwards needs approval
+again. The inbox/UI is yours; the SDK owns the protocol:
+
+```python
+from amanai import approve_action, ApprovalRequired
+
+try:
+    refund_payment(amount=5000)
+except ApprovalRequired as e:
+    token = e.pending.token           # park it: queue, Slack, a human
+approve_action(token)                 # grant one execution
+refund_payment(amount=5000)           # runs; trace records status="approved"
+```
+
+Tokens are deterministic and identical across the Python and TypeScript SDKs for
+the same action, so a grant can be issued from either side.
+
 ## Integrate with your framework
 
 Already built on OpenAI, LangChain, or CrewAI? Don't rewrite each tool — the engine

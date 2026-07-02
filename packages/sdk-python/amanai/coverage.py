@@ -65,8 +65,8 @@ CAPABILITIES = {
         "require_approval before execution. Includes an `internal_url` arg op "
         "that blocks SSRF to private/loopback/link-local/reserved and cloud-"
         "metadata addresses (literal-IP + known-host; no DNS resolution). "
-        "ASI09: enforces the human-approval gate (blocks until approved); the "
-        "approval flow/UI is the caller's",
+        "ASI09: enforces the human-approval gate — parks the action and "
+        "`approve_action` grants one-shot execution; the inbox/UI is the caller's",
     },
     "tool_assertion": {
         "owasp": ["LLM06"],

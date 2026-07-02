@@ -117,7 +117,7 @@ class TraceEvent:
 
     action: ActionRequest
     decision: PolicyDecision
-    status: str  # executed | blocked | shadowed | pending | evaluated | error
+    status: str  # executed | blocked | shadowed | pending | evaluated | error | approved
     output: Any = None
     error: str | None = None
     id: str = field(default_factory=_new_event_id)

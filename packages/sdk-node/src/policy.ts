@@ -111,6 +111,19 @@ export class ApprovalRequired extends Error {
     this.action = action;
     this.decision = decision;
   }
+
+  /** The approval token for this action — pass to `approveAction` to grant one
+   * execution. Byte-identical to the Python SDK's `PendingAction.token` for the
+   * same action, so grants can cross language boundaries. */
+  get token(): string {
+    return pendingToken(this.action);
+  }
+}
+
+/** Deterministic approval token for an action (`pending-` + sha1/8 of its
+ * canonical JSON) — the cross-language twin of Python `PendingAction.token`. */
+export function pendingToken(action: ActionRequest): string {
+  return hash8(actionToJSON(action), "pending-");
 }
 
 // ── Python-canonical JSON (json.dumps(sort_keys=True)) for deterministic ids ────

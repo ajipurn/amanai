@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ApprovalRequired,
   ToolBlocked,
+  actionRequest,
+  approveAction,
   collectTrace,
   guardToolCall,
+  pendingToken,
   runWithContext,
   setMode,
   setPolicy,
@@ -78,6 +82,60 @@ describe("guardToolCall", () => {
       setMode("enforce");
       expect(() => guardToolCall("apply_discount", { pct: 90 })).toThrow(ToolBlocked);
     });
+  });
+});
+
+describe("approvals", () => {
+  const APPROVAL_POLICY = [
+    { id: "big-refund", tool: "refund_payment", args: [{ arg: "amount", op: ">=", value: 1000 }], action: "require_approval" },
+  ];
+
+  it("grants exactly one execution, recorded as approved", () => {
+    runWithContext(() => {
+      setPolicy(loadPolicy(APPROVAL_POLICY));
+      setMode("enforce");
+      const ran: number[] = [];
+      const refund = tool((a: { amount: number }) => {
+        ran.push(a.amount);
+        return "refunded";
+      }, { name: "refund_payment" });
+
+      let token = "";
+      try {
+        refund({ amount: 5000 });
+      } catch (e) {
+        token = (e as ApprovalRequired).token;
+      }
+      expect(token).toMatch(/^pending-[0-9a-f]{8}$/);
+      collectTrace(); // drop the pending event
+
+      approveAction(token);
+      expect(refund({ amount: 5000 })).toBe("refunded");
+      expect(collectTrace()[0].status).toBe("approved");
+      expect(ran).toEqual([5000]);
+
+      expect(() => refund({ amount: 5000 })).toThrow(ApprovalRequired); // one-shot
+      expect(ran).toEqual([5000]);
+    });
+  });
+
+  it("guardToolCall approved path returns the decision and records the grant", () => {
+    runWithContext(() => {
+      setPolicy(loadPolicy(APPROVAL_POLICY));
+      setMode("enforce");
+      expect(() => guardToolCall("refund_payment", { amount: 5000 })).toThrow(ApprovalRequired);
+      collectTrace();
+
+      approveAction(pendingToken(actionRequest("refund_payment", { amount: 5000 })));
+      const decision = guardToolCall("refund_payment", { amount: 5000 });
+      expect((decision as { outcome: string }).outcome).toBe("require_approval");
+      expect(collectTrace()[0].status).toBe("approved");
+    });
+  });
+
+  it("pendingToken is byte-identical to the Python SDK for the same action", () => {
+    // Locked value — see tests/test_approvals.py::test_pending_token_is_cross_language_canonical
+    expect(pendingToken(actionRequest("refund_payment", { amount: 5000 }))).toBe("pending-bcbb2530");
   });
 });
 

@@ -10,13 +10,14 @@
  * args object, so pass `{ argName: value }`.
  */
 
-import { getContext, getMode, getPolicy, recordEvent } from "./context.js";
+import { consumeApproval, getContext, getMode, getPolicy, recordEvent } from "./context.js";
 import type { TraceEvent } from "./context.js";
 import {
   ApprovalRequired,
   ToolBlocked,
   actionRequest,
   evaluate,
+  pendingToken,
 } from "./policy.js";
 import type { ActionRequest } from "./policy.js";
 
@@ -49,9 +50,18 @@ function decideAndAct(
     recordEvent({ action, decision, status: "blocked" });
     throw new ToolBlocked(decision.reason || `${name} blocked by policy`);
   }
+  let approved = false;
   if (decision.outcome === "require_approval" && mode === "enforce") {
-    recordEvent({ action, decision, status: "pending" });
-    throw new ApprovalRequired(action, decision);
+    approved = consumeApproval(pendingToken(action));
+    if (!approved) {
+      recordEvent({ action, decision, status: "pending" });
+      throw new ApprovalRequired(action, decision);
+    }
+    if (!opts.run) {
+      // gate-only: record the consumed grant as evidence; the caller dispatches.
+      recordEvent({ action, decision, status: "approved" });
+      return decision;
+    }
   }
 
   if (!opts.run) {
@@ -66,8 +76,14 @@ function decideAndAct(
     recordEvent({ action, decision, status: "error", error: (e as Error).message });
     throw e;
   }
-  const shadowed = decision.outcome === "block" || decision.outcome === "require_approval";
-  recordEvent({ action, decision, status: shadowed ? "shadowed" : "executed", output: result });
+  // approved = executed under an explicit one-shot grant;
+  // shadowed = a would-be-blocked call that still ran (shadow mode).
+  const status = approved
+    ? "approved"
+    : decision.outcome === "block" || decision.outcome === "require_approval"
+      ? "shadowed"
+      : "executed";
+  recordEvent({ action, decision, status, output: result });
   return result;
 }
 

@@ -41,7 +41,7 @@ for the Amanai server).
 | ASI06 | Memory & Context Poisoning | ❌ | agent memory-store validation — Amanai server (planned) |
 | ASI07 | Insecure Inter-Agent Communication | 🟡 test | MCP `tool_poisoning` (poisoned descriptions); channel security → server |
 | ASI08 | Cascading Agent Failures | ❌ | orchestration circuit-breakers — Amanai server (planned) |
-| ASI09 | Human-Agent Trust Exploitation | ✅ enforce | **Action Policy Engine** — `require_approval` gate blocks high-risk actions until approved (approval flow/UI is the caller's) |
+| ASI09 | Human-Agent Trust Exploitation | ✅ enforce | **Action Policy Engine** — `require_approval` gate parks high-risk actions; `approve_action` grants one-shot execution (inbox/UI is the caller's) |
 | ASI10 | Rogue Agents | ❌ | agent identity + behavior monitoring — Amanai server (planned) |
 
 ## In one line

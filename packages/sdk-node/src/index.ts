@@ -18,6 +18,7 @@ export {
   evaluate,
   actionToJSON,
   decisionToJSON,
+  pendingToken,
 } from "./policy.js";
 export type { Outcome, Mode, ActionRequest, PolicyDecision, Rule } from "./policy.js";
 
@@ -34,6 +35,7 @@ export {
   recordEvent,
   collectTrace,
   reset,
+  approveAction,
   traceEventToJSON,
 } from "./context.js";
 export type { TraceEvent } from "./context.js";
