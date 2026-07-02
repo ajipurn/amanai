@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Action Policy Engine for AI agents — policy-as-code for tool-calls. Zero-dependency TypeScript core engine that loads the same policy JSON and returns the same decisions as the Python SDK.",
   "license": "Apache-2.0",
   "author": "Aji Purnomo <hi@aji.is-a.dev>",

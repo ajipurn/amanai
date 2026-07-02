@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/amanai/">
-    <img alt="release version" src="https://img.shields.io/badge/release-0.3.0-f97316?style=flat-square&labelColor=3f3f46" />
+    <img alt="release version" src="https://img.shields.io/badge/release-0.3.1-f97316?style=flat-square&labelColor=3f3f46" />
   </a>
   <a href="./packages/sdk-python/pyproject.toml">
     <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-111827?style=flat-square&logo=python&logoColor=white&labelColor=3f3f46" />
