@@ -131,4 +131,4 @@ __all__ = [
     "COVERAGE",
     "coverage_for",
 ]
-__version__ = "0.2.0"
+__version__ = "0.2.1"
