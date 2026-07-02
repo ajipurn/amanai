@@ -148,3 +148,24 @@ def test_ssrf_policy_blocks_internal_allows_public():
     assert blocked.outcome == "block"
     allowed = evaluate(ActionRequest("http_fetch", {"url": "https://api.example.com/"}), pol)
     assert allowed.allowed
+
+
+@pytest.mark.parametrize(
+    "value,matches",
+    [
+        (90, True),  # int
+        ("90", True),  # canonical numeric string
+        ("90.0", True),  # decimal
+        ("9e1", True),  # scientific
+        ("INFINITY", True),  # inf >= 50 (fail-closed, case-insensitive)
+        ("9_0", False),  # underscores are not canonical (JS Number() rejects too)
+        ("0x64", False),  # hex is not canonical (Python float() rejects too)
+        ("ninety", False),  # non-numeric
+        (None, False),  # missing/None
+        ([90], False),  # wrong type
+    ],
+)
+def test_numeric_coercion_is_canonical_and_cross_language(value, matches):
+    """`>=` coercion must accept only the canonical grammar shared with the TS
+    engine (operators.ts pyFloat), so a policy decides identically in both SDKs."""
+    assert op_match(">=", value, 50) is matches

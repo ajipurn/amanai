@@ -57,10 +57,16 @@ def record_event(event: TraceEvent) -> None:
 def _normalize_args(fn: Callable, args: tuple, kwargs: dict) -> dict:
     """Map a call to {param_name: value} so policies match regardless of whether
     the tool was called positionally or by keyword (`apply_discount(50)` ==
-    `apply_discount(pct=50)`)."""
+    `apply_discount(pct=50)`).
+
+    Defaults are materialized: a parameter left unset runs with its default, so the
+    policy must see that value. Otherwise `apply_discount()` on `def apply_discount(
+    pct=100)` would evaluate as `{}` and slip past a `pct >= 50` rule while the tool
+    still runs at 100 — enforcement must see the action that actually executes."""
     try:
         sig = inspect.signature(fn)
         bound = sig.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
         out: dict[str, Any] = {}
         for name, param in sig.parameters.items():
             if name not in bound.arguments:
@@ -69,7 +75,8 @@ def _normalize_args(fn: Callable, args: tuple, kwargs: dict) -> dict:
             if param.kind is inspect.Parameter.VAR_KEYWORD:
                 out.update(val)  # **kwargs → flatten to top level
             elif param.kind is inspect.Parameter.VAR_POSITIONAL:
-                out[name] = list(val)  # *args → keep as a list
+                if val:
+                    out[name] = list(val)  # *args → keep as a list (skip empty default)
             else:
                 out[name] = val
         return out

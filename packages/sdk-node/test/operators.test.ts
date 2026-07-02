@@ -22,6 +22,12 @@ describe("opMatch", () => {
     ["internal_url", "http://8.8.8.8", true, false],
     ["internal_url", "localhost", true, true],
     ["internal_url", "http://8.8.8.8", false, true], // fire-on-external
+    // canonical numeric grammar — must match Python operators.py _to_number
+    [">=", "90", 50, true], // canonical numeric string
+    [">=", "9e1", 50, true], // scientific
+    [">=", "INFINITY", 50, true], // inf, case-insensitive (fail-closed)
+    [">=", "9_0", 50, false], // underscores not canonical (Python rejects too)
+    [">=", "0x64", 50, false], // hex not canonical (Python rejects too)
     // never throws → false for malformed / unknown
     [">=", "abc", 50, false],
     [">=", null, 50, false],

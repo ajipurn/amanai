@@ -17,16 +17,25 @@ export const KNOWN_OPERATORS = new Set<string>([
   "email_external", "domain_in", "domain_not_in", "internal_url",
 ]);
 
-/** Mirror Python `float(x)`: True→1, numeric string→number, "" / None / list → NaN. */
+// Canonical numeric grammar, shared with the Python engine (operators.py
+// `_to_number`). Native `Number()` rejects "9_0" but accepts "0x1f", and Python's
+// `float()` does the opposite — that drift flips block/allow across SDKs. This
+// strict grammar removes it: optional sign, decimal or scientific, no underscores,
+// no hex/binary/octal. inf/infinity/nan handled explicitly.
+const NUM_RE = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+/** Coerce under the canonical grammar: True→1, canonical numeric string→number,
+ * inf/nan explicit, everything else → NaN (treated as no-match). */
 function pyFloat(x: unknown): number {
   if (typeof x === "number") return x;
   if (typeof x === "boolean") return x ? 1 : 0;
-  if (typeof x === "string") {
-    const t = x.trim();
-    if (t === "") return NaN;
-    return Number(t);
-  }
-  return NaN; // null/undefined/object → Python float() raises → treated as no-match
+  if (typeof x !== "string") return NaN; // null/undefined/object → no-match
+  const t = x.trim();
+  if (t === "") return NaN;
+  const low = t.toLowerCase().replace(/^[+-]/, "");
+  if (low === "inf" || low === "infinity") return t.startsWith("-") ? -Infinity : Infinity;
+  if (low === "nan") return NaN;
+  return NUM_RE.test(t) ? Number(t) : NaN;
 }
 
 /** Numeric-first equality with a Python-like fallback (so "5" == 5). */

@@ -83,6 +83,35 @@ def _is_internal_url(value) -> bool:
     )
 
 
+# Canonical numeric grammar, shared with the TypeScript engine (operators.ts
+# `pyFloat`). A security decision must coerce numbers identically in both SDKs, so
+# we do NOT defer to each language's native parser: Python `float()` accepts "9_0"
+# while JS `Number()` rejects it, and JS accepts "0x1f" while Python rejects it —
+# that drift flips block/allow across languages. One strict grammar removes it:
+# optional sign, decimal or scientific notation, plus inf/infinity/nan
+# (case-insensitive). No underscores, no hex/binary/octal.
+_NUM_RE = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
+
+
+def _to_number(x) -> float:
+    """Coerce to float under the canonical grammar, else raise ValueError. bool
+    coerces (True → 1.0), matching Python's own numeric `==` semantics."""
+    if isinstance(x, bool):
+        return float(x)
+    if isinstance(x, (int, float)):
+        return float(x)
+    if isinstance(x, str):
+        t = x.strip()
+        low = t.lower().lstrip("+-")
+        if low in ("inf", "infinity"):
+            return float("-inf") if t.lstrip().startswith("-") else float("inf")
+        if low == "nan":
+            return float("nan")
+        if _NUM_RE.match(t):
+            return float(t)
+    raise ValueError(f"not a canonical number: {x!r}")
+
+
 def op_match(op: str, value, target) -> bool:
     """True when `value` satisfies `op` against `target`.
 
@@ -91,18 +120,18 @@ def op_match(op: str, value, target) -> bool:
     """
     try:
         if op in (">=", ">", "<=", "<"):
-            x, y = float(value), float(target)
+            x, y = _to_number(value), _to_number(target)
             return {">=": x >= y, ">": x > y, "<=": x <= y, "<": x < y}[op]
         if op in ("==", "eq"):
             # Numeric-first so "5" == 5. Note: bool coerces (True == 1), matching
             # Python's own semantics; use a string value to compare literally.
             try:
-                return float(value) == float(target)
+                return _to_number(value) == _to_number(target)
             except (TypeError, ValueError):
                 return value == target
         if op in ("!=", "ne"):
             try:
-                return float(value) != float(target)
+                return _to_number(value) != _to_number(target)
             except (TypeError, ValueError):
                 return value != target
         if op == "contains":

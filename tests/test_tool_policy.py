@@ -29,6 +29,20 @@ def test_block_rule_raises_and_is_not_recorded():
     clear_tool_policy()
 
 
+def test_default_argument_is_evaluated_not_bypassed():
+    """A risky default must be enforced: calling with no args runs the tool at its
+    default, so the policy must see that value — not an empty {} that slips past."""
+    set_policy([{"tool": "apply_discount", "arg": "pct", "op": ">=", "value": 50}])
+
+    @tool
+    def apply_discount(pct=100):  # default above the cap
+        return {"pct": pct}
+
+    assert _blocked(apply_discount)  # apply_discount() would run at pct=100
+    assert collect_tool_calls() == []
+    clear_tool_policy()
+
+
 def test_allowed_under_threshold_is_recorded():
     set_policy([{"tool": "apply_discount", "arg": "pct", "op": ">=", "value": 50}])
 

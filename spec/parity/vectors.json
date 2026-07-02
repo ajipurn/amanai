@@ -100,5 +100,29 @@
     ],
     "action": { "tool": "refund_payment", "input": { "amount": 999 } },
     "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "infinity-string-blocks-both-languages",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": "INFINITY" } },
+    "expect": { "outcome": "block", "ruleId": "d" }
+  },
+  {
+    "name": "underscore-number-is-not-canonical-allows",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": "9_0" } },
+    "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "hex-string-is-not-canonical-allows",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": "0x64" } },
+    "expect": { "outcome": "allow", "ruleId": null }
   }
 ]
