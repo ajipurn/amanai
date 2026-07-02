@@ -76,10 +76,15 @@ def approve_action(pending_or_token) -> str:
 
 def _consume_approval(token: str) -> bool:
     grants = _approvals.get()
-    if grants and token in grants:
-        grants.discard(token)
+    if grants is None:
+        return False
+    try:
+        # set.remove is atomic under the GIL — a check-then-discard pair could let
+        # two racing threads both consume the same one-shot grant.
+        grants.remove(token)
         return True
-    return False
+    except KeyError:
+        return False
 
 
 def _buffer() -> list:

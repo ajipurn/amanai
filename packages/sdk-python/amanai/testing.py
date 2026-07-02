@@ -86,10 +86,11 @@ def assert_no_violations(events: list[TraceEvent], policy: Policy | None = None)
         if event.status not in EXECUTED_STATUSES:
             continue
         decision = evaluate(event.action, policy)
-        if decision.outcome == "block":
-            bad.append((event, decision))
-        elif decision.outcome == "require_approval" and event.status != "approved":
-            bad.append((event, decision))
+        if decision.outcome not in VIOLATION_OUTCOMES:
+            continue
+        if decision.outcome == "require_approval" and event.status == "approved":
+            continue  # sanctioned path: executed under an explicit one-shot grant
+        bad.append((event, decision))
     if bad:
         offenders = ", ".join(f"{event.action.tool}[{decision.rule_id}]" for event, decision in bad)
         raise AssertionError(f"policy violations executed in trace: {offenders}")
