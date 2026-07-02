@@ -27,8 +27,8 @@ model *says* — it is what the agent *does*.
 
 Amanai is an **Action Policy Engine** for those tool calls. Write **one policy** for
 risky actions and use it in two places: the SDK enforces it at runtime, and the same
-policy drives CI assertions against recorded agent behavior. Local, deterministic,
-**Apache-2.0**, self-hostable, and independent — no server required to start.
+policy drives CI assertions against recorded agent behavior. Local-first, deterministic,
+**Apache-2.0**, and independent — runs entirely in your process, no server required.
 
 ```bash
 pip install ./packages/sdk-python      # pure-Python, zero deps, no server
@@ -46,8 +46,8 @@ def apply_discount(pct): ...            # raises ToolBlocked when pct >= 50
 
 > **Status:** The SDK is the focus and feature-complete — the same policy drives both
 > runtime enforcement and the offline `tool_assertion` detector
-> (`examples/action.policy.json`). A self-hostable server and dashboard are
-> future work.
+> (`examples/action.policy.json`). A server and dashboard are being built as a
+> separate product; the SDK stands alone and will stay Apache-2.0.
 
 Building in TypeScript? A zero-dependency [TypeScript SDK](packages/sdk-node)
 (`npm install @amanai/sdk`) ports the core engine — it loads the **same policy JSON** and
@@ -104,7 +104,7 @@ in CI and enforce it locally at runtime — with no server required to start.
   → use the **Microsoft Agent Governance Toolkit** or a commercial vendor.
 - You want a fully managed SaaS → use **Straiker** or **Noma**.
 
-Use Amanai when you want a simple test-and-guard loop that is self-hostable,
+Use Amanai when you want a simple test-and-guard loop that is local-first,
 framework-neutral, and independent. Adapters can map framework-specific tool
 calls into the core `ActionRequest` schema.
 
@@ -191,7 +191,8 @@ library — for breadth (adaptive/generative attacks) use **DeepTeam** or **Gara
 ## Production monitoring (optional — needs a server)
 
 The SDK includes a `Monitor` client for sending live traces to an Amanai server.
-The server is a planned self-hosted component; the client already ships in the SDK:
+The server is a separate product in development; the client already ships in the
+SDK, so instrumented apps won't need code changes when it lands:
 
 ```python
 from amanai import Monitor, collect_trace
