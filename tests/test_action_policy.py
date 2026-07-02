@@ -14,9 +14,12 @@ from amanai import (
     ApprovalRequired,
     PolicyError,
     ToolBlocked,
+    TraceEvent,
+    clear_tool_policy,
     collect_tool_calls,
     collect_trace,
     evaluate,
+    get_policy,
     load_policy,
     record_tool_call,
     registered_tools,
@@ -213,10 +216,56 @@ def test_trace_event_canonical_shape():
     act(n=3)
     event = collect_trace()[0]
     d = event.to_dict()
-    assert set(d) == {"action", "decision", "status", "output", "error"}
+    assert set(d) == {"id", "ts", "action", "decision", "status", "output", "error"}
+    assert d["id"].startswith("evt-") and len(d["id"]) == 4 + 32
+    assert d["ts"].endswith("Z")  # canonical UTC, same format as the TS SDK
     assert d["action"]["tool"] == "act" and d["action"]["input"] == {"n": 3}
     assert d["decision"]["outcome"] == "allow"
     assert d["status"] == "executed"
+
+
+def test_decision_records_policy_digest():
+    """Evidence must answer "which policy version decided this?": every decision
+    made under a policy carries its digest; no policy → None."""
+    set_policy([{"id": "d", "tool": "apply", "args": [{"arg": "pct", "op": ">=", "value": 50}]}])
+
+    @tool
+    def apply(pct):
+        return pct
+
+    digest = get_policy().digest
+    assert digest.startswith("policy-")
+
+    apply(pct=10)  # allowed, but still evaluated under the policy
+    event = collect_trace()[0]
+    assert event.decision.policy_digest == digest
+
+    clear_tool_policy()
+    apply(pct=90)
+    assert collect_trace()[0].decision.policy_digest is None  # no policy loaded
+
+
+def test_policy_digest_is_stable_and_version_sensitive():
+    rules = [{"id": "d", "tool": "apply", "args": [{"arg": "pct", "op": ">=", "value": 50}]}]
+    assert load_policy(rules).digest == load_policy(rules).digest  # same rules, same digest
+    changed = [{"id": "d", "tool": "apply", "args": [{"arg": "pct", "op": ">=", "value": 60}]}]
+    assert load_policy(rules).digest != load_policy(changed).digest  # any edit, new version
+
+
+def test_trace_round_trip_preserves_id_ts_and_legacy_loads_empty():
+    @tool
+    def act(n):
+        return n
+
+    act(n=1)
+    event = collect_trace()[0]
+    again = TraceEvent.from_dict(event.to_dict())
+    assert (again.id, again.ts) == (event.id, event.ts)
+
+    # Pre-0.3 trace: no id/ts — loads as "" (unknown), never fabricated on load.
+    legacy = {k: v for k, v in event.to_dict().items() if k not in ("id", "ts")}
+    old = TraceEvent.from_dict(legacy)
+    assert old.id == "" and old.ts == ""
 
 
 def test_positional_args_are_normalized():

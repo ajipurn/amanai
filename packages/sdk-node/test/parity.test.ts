@@ -11,7 +11,7 @@ interface Vector {
   name: string;
   policy: unknown[];
   action: { tool: string; input?: Record<string, unknown>; capability?: string; context?: Record<string, unknown> };
-  expect: { outcome: string; ruleId: string | null };
+  expect: { outcome: string; ruleId: string | null; policyDigest?: string };
 }
 
 const vectors: Vector[] = JSON.parse(readFileSync(vectorsPath, "utf8"));
@@ -27,6 +27,9 @@ describe("cross-language parity vectors", () => {
       const decision = evaluate(action, policy);
       expect(decision.outcome).toBe(vec.expect.outcome);
       expect(decision.ruleId).toBe(vec.expect.ruleId);
+      if (vec.expect.policyDigest !== undefined) {
+        expect(decision.policyDigest).toBe(vec.expect.policyDigest);
+      }
     });
   }
 });

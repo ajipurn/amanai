@@ -32,7 +32,13 @@ function decideAndAct(
   });
   const decision = policy
     ? evaluate(action, policy)
-    : { outcome: "allow" as const, ruleId: null, reason: "no policy loaded", metadata: {} };
+    : {
+        outcome: "allow" as const,
+        ruleId: null,
+        reason: "no policy loaded",
+        metadata: {},
+        policyDigest: null,
+      };
   const mode = getMode();
 
   if (mode === "test") {

@@ -41,6 +41,20 @@ describe("tool wrapper", () => {
     });
   });
 
+  it("stamps recorded evidence with id, UTC ts, and the policy digest", () => {
+    runWithContext(() => {
+      const policy = loadPolicy(POLICY);
+      setPolicy(policy);
+      setMode("enforce");
+      const applyDiscount = tool((args: { pct: number }) => "applied", { name: "apply_discount" });
+      applyDiscount({ pct: 10 });
+      const e = collectTrace()[0];
+      expect(e.id).toMatch(/^evt-[0-9a-f]{32}$/);
+      expect(e.ts).toMatch(/Z$/); // Date.toISOString() — same canonical format as Python
+      expect(e.decision.policyDigest).toBe(policy.digest);
+    });
+  });
+
   it("test mode records without executing", () => {
     runWithContext(() => {
       setPolicy(loadPolicy(POLICY));

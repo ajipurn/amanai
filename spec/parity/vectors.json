@@ -124,5 +124,13 @@
     ],
     "action": { "tool": "apply_discount", "input": { "pct": "0x64" } },
     "expect": { "outcome": "allow", "ruleId": null }
+  },
+  {
+    "name": "policy-digest-is-identical-cross-language",
+    "policy": [
+      { "id": "d", "tool": "apply_discount", "args": [{ "arg": "pct", "op": ">=", "value": 50 }], "action": "block", "reason": "cap" }
+    ],
+    "action": { "tool": "apply_discount", "input": { "pct": 90 } },
+    "expect": { "outcome": "block", "ruleId": "d", "policyDigest": "policy-dd010ebe" }
   }
 ]

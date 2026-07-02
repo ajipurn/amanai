@@ -62,7 +62,8 @@ languages' CI.
 - **Runtime modes** — `enforce`, `shadow` (observe before blocking), or `test`
   (CI, no side effects).
 - **Evidence traces** — every decision becomes a canonical `TraceEvent` (action,
-  decision, execution status) for debugging and audit.
+  decision, execution status), stamped with a unique event id, a UTC timestamp,
+  and the digest of the policy version that decided it — for debugging and audit.
 - **One-policy loop** — the same file enforces at runtime and asserts expected
   behavior in CI; a contract test keeps both sides aligned.
 - **Local guardrails** — `guard_input` blocks prompt injection; `guard_output`

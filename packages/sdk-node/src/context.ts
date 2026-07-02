@@ -9,6 +9,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { actionToJSON, decisionToJSON } from "./policy.js";
 import type { Mode, Policy, PolicyDecision, ActionRequest } from "./policy.js";
 
@@ -18,6 +19,9 @@ export interface TraceEvent {
   status: string; // executed | blocked | shadowed | pending | evaluated | error
   output?: unknown;
   error?: string | null;
+  /** Unique event id (`evt-` + 32 hex) and UTC timestamp — filled by recordEvent. */
+  id?: string;
+  ts?: string;
 }
 
 interface Store {
@@ -72,6 +76,10 @@ export function clearContext(): void {
 }
 
 export function recordEvent(event: TraceEvent): void {
+  // Single choke point: every recorded event gets a unique id and a UTC timestamp
+  // (`Date.toISOString()` — same canonical format the Python SDK emits).
+  event.id ??= "evt-" + randomUUID().replaceAll("-", "");
+  event.ts ??= new Date().toISOString();
   store().trace.push(event);
 }
 /** Return the trace recorded so far and clear the buffer. */
@@ -87,6 +95,8 @@ export function reset(): void {
 
 export function traceEventToJSON(e: TraceEvent): Record<string, unknown> {
   return {
+    id: e.id ?? "",
+    ts: e.ts ?? "",
     action: actionToJSON(e.action),
     decision: decisionToJSON(e.decision),
     status: e.status,

@@ -27,7 +27,9 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import json
+import uuid
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -75,12 +77,17 @@ class ActionRequest:
 
 @dataclass(frozen=True)
 class PolicyDecision:
-    """The engine's verdict for one action."""
+    """The engine's verdict for one action.
+
+    `policy_digest` records *which* policy version decided (see `Policy.digest`);
+    None when no policy was loaded. Without it a trace can't answer the audit
+    question "what rules were in force when this ran?"."""
 
     outcome: str
     rule_id: str | None = None
     reason: str = ""
     metadata: dict = field(default_factory=dict)
+    policy_digest: str | None = None
 
     @property
     def allowed(self) -> bool:
@@ -90,18 +97,36 @@ class PolicyDecision:
         return asdict(self)
 
 
+def _new_event_id() -> str:
+    return "evt-" + uuid.uuid4().hex
+
+
+def _now_iso() -> str:
+    """UTC timestamp, millisecond precision, `Z` suffix — one canonical format
+    across both SDKs (matches JS `Date.toISOString()`)."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 @dataclass
 class TraceEvent:
-    """Evidence: one action, its decision, and what happened when executed."""
+    """Evidence: one action, its decision, and what happened when executed.
+
+    Each event carries a unique `id` and a UTC `ts` so evidence can be referenced,
+    deduplicated, and ordered; the decision's `policy_digest` pins which policy
+    version decided it."""
 
     action: ActionRequest
     decision: PolicyDecision
     status: str  # executed | blocked | shadowed | pending | evaluated | error
     output: Any = None
     error: str | None = None
+    id: str = field(default_factory=_new_event_id)
+    ts: str = field(default_factory=_now_iso)
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
+            "ts": self.ts,
             "action": self.action.to_dict(),
             "decision": self.decision.to_dict(),
             "status": self.status,
@@ -112,13 +137,18 @@ class TraceEvent:
     @classmethod
     def from_dict(cls, d: dict) -> "TraceEvent":
         """Rebuild a TraceEvent from `to_dict()` output — the inverse round-trip
-        so a trace can be persisted as JSON and reloaded (see `load_trace`)."""
+        so a trace can be persisted as JSON and reloaded (see `load_trace`).
+
+        Pre-0.3 traces have no `id`/`ts`; they load as `""` — evidence must say
+        "unknown", never fabricate an id or a timestamp on load."""
         return cls(
             action=ActionRequest(**d["action"]),
             decision=PolicyDecision(**d["decision"]),
             status=d["status"],
             output=d.get("output"),
             error=d.get("error"),
+            id=d.get("id", ""),
+            ts=d.get("ts", ""),
         )
 
 
@@ -163,15 +193,39 @@ def _preds_true(preds: tuple[dict, ...], source: dict) -> bool:
     return True
 
 
+def _rule_dict(r: Rule) -> dict:
+    """The rule's canonical normalized shape, shared with the TS engine so the
+    policy digest is identical across languages."""
+    return {
+        "id": r.id,
+        "action": r.action,
+        "tool": r.tool,
+        "capability": r.capability,
+        "reason": r.reason,
+        "args": list(r.args),
+        "context": list(r.context),
+    }
+
+
 class Policy:
     """An ordered, validated set of rules. First match wins."""
 
     def __init__(self, rules: list[Rule]):
         self.rules = rules
+        self._digest: str | None = None
 
     @property
     def ids(self) -> list[str]:
         return [r.id for r in self.rules]
+
+    @property
+    def digest(self) -> str:
+        """Deterministic version id of the normalized rules (`policy-` + sha1/8).
+        Stamped into every decision so a trace records which policy decided it.
+        A version marker, not a cryptographic integrity proof."""
+        if self._digest is None:
+            self._digest = _hash8([_rule_dict(r) for r in self.rules], "policy-")
+        return self._digest
 
     def match(self, action: ActionRequest) -> Rule | None:
         for rule in self.rules:
@@ -345,10 +399,11 @@ def evaluate(action: ActionRequest, policy: Policy | None = None) -> PolicyDecis
         return PolicyDecision("allow", None, "no policy loaded")
     rule = pol.match(action)
     if rule is None:
-        return PolicyDecision("allow", None, "no matching policy rule")
+        return PolicyDecision("allow", None, "no matching policy rule", policy_digest=pol.digest)
     return PolicyDecision(
         outcome=rule.action,
         rule_id=rule.id,
         reason=rule.reason or f"matched rule {rule.id}",
         metadata={"capability": rule.capability} if rule.capability else {},
+        policy_digest=pol.digest,
     )

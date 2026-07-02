@@ -47,11 +47,19 @@ export interface PolicyDecision {
   ruleId: string | null;
   reason: string;
   metadata: Record<string, unknown>;
+  /** Which policy version decided (see `Policy.digest`); null when none loaded. */
+  policyDigest: string | null;
 }
 
 /** Emit the Python-identical JSON keys (`rule_id`) so traces are cross-readable. */
 export function decisionToJSON(d: PolicyDecision): Record<string, unknown> {
-  return { outcome: d.outcome, rule_id: d.ruleId, reason: d.reason, metadata: d.metadata };
+  return {
+    outcome: d.outcome,
+    rule_id: d.ruleId,
+    reason: d.reason,
+    metadata: d.metadata,
+    policy_digest: d.policyDigest,
+  };
 }
 
 export function actionToJSON(a: ActionRequest): Record<string, unknown> {
@@ -191,11 +199,37 @@ function normalizeRule(raw: unknown, idx: number, requireIds: boolean): Rule {
   };
 }
 
+/** The rule's canonical normalized shape, shared with the Python engine
+ * (`policy.py::_rule_dict`) so the policy digest is identical across languages. */
+function ruleDict(r: Rule): Record<string, unknown> {
+  return {
+    id: r.id,
+    action: r.action,
+    tool: r.tool,
+    capability: r.capability,
+    reason: r.reason,
+    args: r.args.map((p) => ({ arg: p.key, op: p.op, value: p.value ?? null })),
+    context: r.context.map((p) => ({ key: p.key, op: p.op, value: p.value ?? null })),
+  };
+}
+
 export class Policy {
+  private _digest: string | null = null;
+
   constructor(public rules: Rule[]) {}
 
   get ids(): string[] {
     return this.rules.map((r) => r.id);
+  }
+
+  /** Deterministic version id of the normalized rules (`policy-` + sha1/8),
+   * byte-identical to the Python engine's `Policy.digest`. A version marker,
+   * not a cryptographic integrity proof. */
+  get digest(): string {
+    if (this._digest === null) {
+      this._digest = hash8(this.rules.map(ruleDict), "policy-");
+    }
+    return this._digest;
   }
 
   match(action: ActionRequest): Rule | null {
@@ -248,12 +282,19 @@ export function loadPolicy(source: unknown, opts: { requireIds?: boolean } = {})
 export function evaluate(action: ActionRequest, policy: Policy): PolicyDecision {
   const rule = policy.match(action);
   if (rule === null) {
-    return { outcome: "allow", ruleId: null, reason: "no matching policy rule", metadata: {} };
+    return {
+      outcome: "allow",
+      ruleId: null,
+      reason: "no matching policy rule",
+      metadata: {},
+      policyDigest: policy.digest,
+    };
   }
   return {
     outcome: rule.action,
     ruleId: rule.id,
     reason: rule.reason || `matched rule ${rule.id}`,
     metadata: rule.capability ? { capability: rule.capability } : {},
+    policyDigest: policy.digest,
   };
 }

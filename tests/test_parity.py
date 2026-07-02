@@ -28,3 +28,5 @@ def test_vector_decides_as_expected(vec):
     decision = evaluate(action, policy)
     assert decision.outcome == vec["expect"]["outcome"]
     assert decision.rule_id == vec["expect"]["ruleId"]
+    if "policyDigest" in vec["expect"]:
+        assert decision.policy_digest == vec["expect"]["policyDigest"]
