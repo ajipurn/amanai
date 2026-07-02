@@ -15,16 +15,22 @@ jobs:
       contents: write              # create the GitHub Release from the pushed tag
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - uses: astral-sh/setup-uv@v5
 
-      # The wheel version comes from amanai/__init__.__version__, not the tag.
-      # Fail fast if they disagree so we never publish a mislabeled release.
+      - name: Version references are synced
+        run: node scripts/sync-version.mjs --check
+
+      # The wheel version is synced from VERSION into amanai/__init__.__version__.
+      # Fail fast if the tag disagrees so we never publish a mislabeled release.
       - name: Tag must match package version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          VER=$(grep -oE '__version__ = "[^"]+"' packages/sdk-python/amanai/__init__.py | cut -d'"' -f2)
+          VER=$(cat VERSION)
           echo "tag=$TAG  package=$VER"
-          test "$TAG" = "$VER" || { echo "::error::tag v$TAG != __version__ $VER"; exit 1; }
+          test "$TAG" = "$VER" || { echo "::error::tag v$TAG != VERSION $VER"; exit 1; }
 
       - name: Build sdist + wheel
         run: uv build packages/sdk-python
